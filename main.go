@@ -18,7 +18,7 @@ func main() {
 
 	flag.Parse()
 
-	net := network.NewNetwork(784, 10, []int{5, 5}, *learningRate)
+	net := network.NewNetwork(784, 10, 3, *learningRate)
 
 	switch *action {
 	case "train":

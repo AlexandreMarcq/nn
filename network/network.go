@@ -40,31 +40,26 @@ func sigmoidPrime(m mat.Matrix) mat.Matrix {
 
 type Network struct {
 	InputLayersNumber  int
-	hiddenLayers       []int
 	hiddenLayersNumber int
 	OutputLayerNumber  int
-	HiddenWeights      []*mat.Dense
+	HiddenWeights      *mat.Dense
 	OutputWeights      *mat.Dense
 	learningRate       float64
 }
 
-func NewNetwork(inputs, outputs int, hiddenLayers []int, rate float64) (net *Network) {
+func NewNetwork(inputs, hiddens, outputs int, rate float64) (net *Network) {
 	net = &Network{
-		InputLayersNumber: inputs,
-		hiddenLayers:      hiddenLayers,
-		OutputLayerNumber: outputs,
-		learningRate:      rate,
+		InputLayersNumber:  inputs,
+		hiddenLayersNumber: hiddens,
+		OutputLayerNumber:  outputs,
+		learningRate:       rate,
 	}
 
-	net.hiddenLayersNumber = len(net.hiddenLayers)
-
-	for i := 0; i < net.hiddenLayersNumber; i++ {
-		net.HiddenWeights = append(net.HiddenWeights, mat.NewDense(
-			net.hiddenLayersNumber,
-			inputs,
-			generateWeights(net.InputLayersNumber*net.hiddenLayersNumber, float64(net.InputLayersNumber)),
-		))
-	}
+	net.HiddenWeights = mat.NewDense(
+		net.hiddenLayersNumber,
+		inputs,
+		generateWeights(net.InputLayersNumber*net.hiddenLayersNumber, float64(net.InputLayersNumber)),
+	)
 
 	net.OutputWeights = mat.NewDense(
 		outputs,
@@ -77,25 +72,12 @@ func NewNetwork(inputs, outputs int, hiddenLayers []int, rate float64) (net *Net
 
 func (n Network) Predict(inputData []float64) (mat.Matrix, error) {
 	inputs := mat.NewDense(len(inputData), 1, inputData)
-	var currentHiddenInputs, currentHiddenOutputs mat.Matrix
-	var err error
-	for i, hiddenLayer := range n.HiddenWeights {
-		if i == 0 {
-			currentHiddenInputs, err = matrix.Dot(hiddenLayer, inputs)
-			if err != nil {
-				return nil, err
-			}
-		} else if i == n.hiddenLayersNumber-1 {
-			break
-		} else {
-			currentHiddenInputs, err = matrix.Dot(hiddenLayer, currentHiddenOutputs)
-			if err != nil {
-				return nil, err
-			}
-		}
+	hiddenInputs, err := matrix.Dot(n.HiddenWeights, inputs)
+	if err != nil {
+		return nil, err
 	}
-	currentHiddenOutputs = matrix.Apply(sigmoid, currentHiddenInputs)
-	finalInputs, err := matrix.Dot(n.OutputWeights, currentHiddenOutputs)
+	hiddenOutputs := matrix.Apply(sigmoid, hiddenInputs)
+	finalInputs, err := matrix.Dot(n.OutputWeights, hiddenOutputs)
 	if err != nil {
 		return nil, err
 	}
@@ -105,25 +87,12 @@ func (n Network) Predict(inputData []float64) (mat.Matrix, error) {
 
 func (n *Network) Train(inputData []float64, targetData []float64) error {
 	inputs := mat.NewDense(len(inputData), 1, inputData)
-	var currentHiddenInputs, currentHiddenOutputs mat.Matrix
-	var err error
-	for i, hiddenLayer := range n.HiddenWeights {
-		if i == 0 {
-			currentHiddenInputs, err = matrix.Dot(hiddenLayer, inputs)
-			if err != nil {
-				return err
-			}
-		} else if i == n.hiddenLayersNumber-1 {
-			break
-		} else {
-			currentHiddenInputs, err = matrix.Dot(hiddenLayer, currentHiddenOutputs)
-			if err != nil {
-				return err
-			}
-		}
+	hiddenInputs, err := matrix.Dot(n.HiddenWeights, inputs)
+	if err != nil {
+		return err
 	}
-	currentHiddenOutputs = matrix.Apply(sigmoid, currentHiddenInputs)
-	finalInputs, err := matrix.Dot(n.OutputWeights, currentHiddenOutputs)
+	hiddenOutputs := matrix.Apply(sigmoid, hiddenInputs)
+	finalInputs, err := matrix.Dot(n.OutputWeights, hiddenOutputs)
 	if err != nil {
 		return err
 	}
@@ -131,7 +100,7 @@ func (n *Network) Train(inputData []float64, targetData []float64) error {
 
 	targets := mat.NewDense(len(targetData), 1, targetData)
 	outputErrors := matrix.Substract(targets, finalOutputs)
-	currentHiddenError, err := matrix.Dot(n.OutputWeights.T(), outputErrors)
+	hiddenErrors, err := matrix.Dot(n.OutputWeights.T(), outputErrors)
 	if err != nil {
 		return err
 	}
@@ -140,30 +109,20 @@ func (n *Network) Train(inputData []float64, targetData []float64) error {
 	//           = - learning_rate * outputErrors . finalOutputs * (1 - finalOutputs) . hiddenOutputs
 
 	a := matrix.Multiply(outputErrors, sigmoidPrime(finalOutputs))
-	b, err := matrix.Dot(a, currentHiddenOutputs.T())
+	b, err := matrix.Dot(a, hiddenOutputs.T())
 	if err != nil {
 		return err
 	}
 	c := matrix.Scale(b, n.learningRate)
 	n.OutputWeights = matrix.Add(n.OutputWeights, c).(*mat.Dense)
 
-	for i := n.hiddenLayersNumber; i > 0; i-- {
-		var d mat.Matrix
-		if i == 0 {
-			d = matrix.Multiply(currentHiddenError, sigmoidPrime(currentHiddenOutputs))
-		} else if i == n.hiddenLayersNumber-1 {
-			break
-		} else {
-			error := matrix.Substract(d, d)
-			d = matrix.Multiply(error, sigmoidPrime(currentHiddenOutputs))
-		}
-		e, err := matrix.Dot(d, n.HiddenWeights[i].T())
-		if err != nil {
-			return err
-		}
-		f := matrix.Scale(e, n.learningRate)
-		n.HiddenWeights[i] = matrix.Add(n.HiddenWeights[i], f).(*mat.Dense)
+	d := matrix.Multiply(hiddenErrors, sigmoidPrime(hiddenOutputs))
+	e, err := matrix.Dot(d, hiddenOutputs.T())
+	if err != nil {
+		return err
 	}
+	f := matrix.Scale(e, n.learningRate)
+	n.HiddenWeights = matrix.Add(n.HiddenWeights, f).(*mat.Dense)
 
 	return nil
 }

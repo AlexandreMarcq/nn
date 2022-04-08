@@ -1,7 +1,6 @@
 package utils
 
 import (
-	"fmt"
 	"image"
 	"image/png"
 	"os"
@@ -40,21 +39,19 @@ func DataFromImage(path string) ([]float64, error) {
 }
 
 func Load(net *network.Network, path string) error {
-	for i, hiddenLayer := range net.HiddenWeights {
-		h, err := os.Open(path + fmt.Sprintf("/test/hweights%d.model", i))
-		defer h.Close()
-		if err != nil {
-			return err
-		}
-		hiddenLayer.Reset()
-		hiddenLayer.UnmarshalBinaryFrom(h)
-	}
-
-	o, err := os.Open(path + "/test/oweights.model")
-	defer o.Close()
+	h, err := os.Open(path + "/test/hweights%d.model")
 	if err != nil {
 		return err
 	}
+	defer h.Close()
+	net.HiddenWeights.Reset()
+	net.HiddenWeights.UnmarshalBinaryFrom(h)
+
+	o, err := os.Open(path + "/test/oweights.model")
+	if err != nil {
+		return err
+	}
+	defer o.Close()
 	net.OutputWeights.Reset()
 	net.OutputWeights.UnmarshalBinaryFrom(o)
 
@@ -62,20 +59,18 @@ func Load(net *network.Network, path string) error {
 }
 
 func Save(net *network.Network, path string) error {
-	for i, hiddenLayer := range net.HiddenWeights {
-		h, err := os.Create(path + fmt.Sprintf("/test/hweights%d.model", i))
-		defer h.Close()
-		if err != nil {
-			return err
-		}
-		hiddenLayer.MarshalBinaryTo(h)
-	}
-
-	o, err := os.Create(path + "/test/oweights.model")
-	defer o.Close()
+	h, err := os.Create(path + "/hweights.model")
 	if err != nil {
 		return err
 	}
+	defer h.Close()
+	net.HiddenWeights.MarshalBinaryTo(h)
+
+	o, err := os.Create(path + "/test/oweights.model")
+	if err != nil {
+		return err
+	}
+	defer o.Close()
 
 	net.OutputWeights.MarshalBinaryTo(o)
 
